@@ -1,61 +1,55 @@
-import axios from 'axios';
-import React from 'react';
+import React, { Component } from 'react';
+import withFirebaseAuth from 'react-with-firebase-auth'
+import * as firebase from 'firebase/app';
+import 'firebase/auth';
+import firebaseConfig from './firebaseConfig';
+import logo from './logo.svg';
 import './App.css';
-
-function App() {
-  // React state hook to locally store our formData
-  // which is the file data we want to upload (but may not)
-  const [formData, setFormData] = React.useState();
+import Main from './Main';
 
 
-  // handle btn clicking & video upload
-  const btnOnClick = () => {
-    // send post request at 8080 with the file form data for upload
-    axios.post('http://localhost:8080/api/upload', formData,
-      {
-        headers: {
-          // [IMPORTANT] specify the content type as multipart
-          // otherwise formidable on the backend doesn't pick up this data
-          // as something that it needs to parse
-          'content-type': 'multipart/form-data'
-        }
-      })
-      // if we get a 200 response back
-      .then(response => console.log('Success', response.data))
-      // if we get some error response back
-      .catch(err => console.error('Upload failed', err))
-  }
+const firebaseApp = firebase.initializeApp(firebaseConfig);
 
-  // handling file choosing
-  const fileUpload = (e) => {
-    // target files are the files that the user picked (can be one or more if allowed)
-    const files = e.target.files;
+class App extends Component {
+  render() {
+    const {
+      user,
+      signOut,
+      signInWithGoogle,
+    } = this.props;
 
-    if (files === null || files.length === 0) {
-      console.log("null files");
-      return;
-    }
+    return (
+      <div className="App">
+        <header className="App-header">
+          <img src={logo} className="App-logo" alt="logo" />
+          {
+            user
+              ? <p>Hello, {user.displayName}</p>
+              : <p>Please sign in.</p>
+          }
 
-    // appending the local file to our FormData Buffer to send to our backend
-    const _formData = new FormData();
-    _formData.append('video', files[0]);
+          {
+            user
+              ? <button onClick={signOut}>Sign out</button>
+              : <button onClick={signInWithGoogle}>Sign in with Google</button>
+          }
+        </header>
 
-    // using the local state hooks in order to set our formData for upload
-    // without uploading right away (button onClick handles the actual sending)
-    setFormData(_formData);
-  }
-
-  return (
-    <div className="App">
-      <div>
-        <input type="file" onChange={fileUpload} accept="video/*,application/pdf,application/txt" />
-        <label>
-          Upload file
-        </label>
-        <button onClick={btnOnClick}>Submit</button>
+        <h1>File Upload</h1>
+        <Main />
+        
       </div>
-    </div>
-  );
+    );
+  }
 }
 
-export default App;
+const firebaseAppAuth = firebaseApp.auth();
+
+const providers = {
+  googleProvider: new firebase.auth.GoogleAuthProvider(),
+};
+
+export default withFirebaseAuth({
+  providers,
+  firebaseAppAuth,
+})(App);
