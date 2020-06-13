@@ -1,8 +1,46 @@
-
 const express = require('express'); // import express for server
 const bodyParser = require('body-parser'); // import body parser to read json bodies
 const cors = require('cors'); // cors to allow front-end to call backend
 const formidable = require('formidable'); // formidable to parse formData from front-end
+
+// added by Jason begin:
+
+// .env file for private key management
+const env = require('dotenv').config();
+const privateKey = process.env.PRIVATE_KEY;
+const myAccount = process.env.MY_ACCOUNT;
+// importing sha-256
+const sha256  = require('js-sha256');
+// importintg web3 for smart contracts
+const web3 = require('web3');
+// sets up our HTTP connection to our local blockchain
+const provider = new web3.providers.HttpProvider('http://localhost:8545');
+
+// sets up web3 to use that http connection (aka provider)
+const web3Conn = new web3(provider);
+
+const account = web3Conn.eth.accounts.privateKeyToAccount("") // from ganache-cli terminal "Private Keys" or metamask/.env file
+web3Conn.eth.accounts.wallet.add(account);
+web3Conn.eth.defaultAccount = account.address;
+
+// using the filesystem module to read in the json interface for our smart contract
+const fs = require('fs');
+
+// json interface is a byte buffer (Buffer object)
+const jsonInterface = fs.readFileSync('../build/contracts/VideoAuth.json');
+
+// convert the Buffer into a JSON string
+const jsonString = jsonInterface.toString();
+
+// parsing our jsonString into an object interface to pass to web3
+const jsonObject = JSON.parse(jsonString);
+
+// create a RPC to the actual smart contract called videoAuth using contract ABI
+const videoAuth = new web3Conn.eth.Contract(jsonObject.abi, "0x2eA802Ed11B849723bB73Ff8C006D6C29d0a7650"); // from truffele migrate contract address or Rinkeby
+
+// console.log(videoAuth.methods);
+
+// added by Jason end
 
 const app = express(); // create new server instance
 app.use(cors());  // allow port :3000 to call our backend on :8080 
@@ -58,12 +96,39 @@ app.post('/api/upload', (request, response) => {
             const contents = buff.toString();
 
             // logs the contents to console
-            console.log(contents)
+            //console.log(contents)
 
             // TODO: run the crypto hash function on the string
             // and put that hash onto the smart contract
+            try{            
+                const video_hash = sha256(contents);
+                console.log(video_hash);
 
-
+                    app.get("/api", async (req, res) => {
+                        //console.log("Inside app.get"); // does not come here automatically, must hit Enter in the localhost:8080/api URL bar
+                        compare_hash = await videoAuth.methods.compare_hash(video_hash).call();
+                        console.log(compare_hash);
+                        if(compare_hash == 0){
+                        const store_hash = await videoAuth.methods.store_hash(video_hash).send({ // will fail without provided gas
+                            from: "", // from ganache-cli terminal "Available Accounts" or metamask/.env file
+                            gas: "250000", // not quite sure how to calculate these numbers
+                            gasPrice: "20000000" // not quite sure how to calculate these numbers
+                        }); 
+                        console.log("Stored");
+                    }
+                    else{
+                        console.log("Video is authentic\n");
+                    }
+                        res.status(200).json({ // 200 means success
+                            response: compare_hash
+                        })
+                    })
+                }
+                catch(err){
+                    response.status(400).json({
+                        response: "Upload not successful"
+                    });
+                }
             // send response back to front-end showing success
             response.status(200).json({
                 response: "Upload success"
